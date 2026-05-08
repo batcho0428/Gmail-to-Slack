@@ -1,0 +1,149 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Gmail → Slack 転送 — つかいかた（やさしい説明）</title>
+  <style>
+    :root{--gap:14px}
+    html,body{height:100%}
+    body{font-family:system-ui,-apple-system,Segoe UI,Roboto,"Hiragino Kaku Gothic ProN",Meiryo,sans-serif;margin:0;background:#fff;color:#111;-webkit-font-smoothing:antialiased}
+    .wrap{max-width:880px;margin:0 auto;padding:18px}
+    header{padding-bottom:8px}
+    h1{font-size:1.25rem;margin:0 0 6px}
+    p.lead{margin:0 0 12px;color:#444}
+
+    .cards{display:grid;grid-template-columns:1fr;gap:var(--gap)}
+    /* Slack風の投稿カード */
+    .post{display:flex;gap:12px;align-items:stretch;padding:12px;border-radius:8px;border:1px solid #eef2f6;background:#fff}
+    /* 縦の色帯（サンプルの色）: ポスト全体の高さに合わせて表示されます */
+    .accent{width:8px;border-radius:6px;background:#ddd;align-self:stretch;flex-shrink:0}
+    .avatar{width:40px;height:40px;border-radius:999px;background:#cfd8dc;flex-shrink:0;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700}
+    .meta{display:flex;flex-direction:column;flex:1}
+    .meta .head{display:flex;align-items:center;gap:8px}
+    .author{font-weight:700}
+    .time{font-size:0.85rem;color:#666}
+    .message{margin-top:8px;font-size:0.98rem;color:#111;line-height:1.4}
+    .sample{height:64px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:1rem;color:#fff}
+
+    .c-1{background:#2f7d32} /* 受信 新規 */
+    .c-2{background:#1f5fbf} /* 受信 返信 */
+    .c-3{background:#a5d6a7;color:#123} /* 送信 新規 */
+    .c-4{background:#9ecbff;color:#053c6b} /* 送信 返信 */
+
+    .row{display:flex;gap:10px;align-items:center}
+    .label{flex:1}
+    .desc{font-size:0.97rem;color:#333;margin-top:8px}
+
+    h2{font-size:1.05rem;margin:12px 0}
+    ul{padding-left:1.1rem;margin:8px 0}
+    li{margin:6px 0}
+
+    footer{margin-top:18px;color:#666;font-size:0.95rem}
+
+    @media(min-width:640px){
+      .cards{grid-template-columns:repeat(2,1fr)}
+      .sample{height:80px;font-size:1.05rem}
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <h1>Gmail が Slack に届いたときの見かた（やさしい説明）</h1>
+      <p class="lead">このページは、Slack に届いたメールの色が何を意味するか、かんたんに説明します。普段お使いの方向けの内容だけです。</p>
+    </header>
+
+    <!-- ここに色見本（大きく分かりやすく） -->
+    <section class="card" aria-label="色見本" style="margin:12px 0 18px;padding:14px">
+      <strong>色見本</strong>
+      <p class="desc">下の四つの色は、Slack に届いたメールの種類を表します。色と説明を合わせてご覧ください。</p>
+      <div style="display:flex;gap:12px;flex-wrap:wrap;margin-top:12px">
+        <div style="flex:1;min-width:140px;display:flex;flex-direction:column;align-items:center">
+          <div style="width:100%;height:72px;border-radius:10px;background:#2f7d32;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700">受信（新規）</div>
+          <div style="margin-top:8px;color:#444">濃い緑 — #2f7d32</div>
+        </div>
+        <div style="flex:1;min-width:140px;display:flex;flex-direction:column;align-items:center">
+          <div style="width:100%;height:72px;border-radius:10px;background:#1f5fbf;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700">受信（返信）</div>
+          <div style="margin-top:8px;color:#444">濃い青 — #1f5fbf</div>
+        </div>
+        <div style="flex:1;min-width:140px;display:flex;flex-direction:column;align-items:center">
+          <div style="width:100%;height:72px;border-radius:10px;background:#a5d6a7;display:flex;align-items:center;justify-content:center;color:#123;font-weight:700">送信（新規）</div>
+          <div style="margin-top:8px;color:#444">薄い緑 — #a5d6a7</div>
+        </div>
+        <div style="flex:1;min-width:140px;display:flex;flex-direction:column;align-items:center">
+          <div style="width:100%;height:72px;border-radius:10px;background:#9ecbff;display:flex;align-items:center;justify-content:center;color:#053c6b;font-weight:700">送信（返信）</div>
+          <div style="margin-top:8px;color:#444">薄い青 — #9ecbff</div>
+        </div>
+      </div>
+    </section>
+    <section class="cards">
+      <!-- 受信（新規） -->
+      <div class="card">
+        <div class="post" aria-label="受信 新規">
+          <div class="accent" style="background:#2f7d32"></div>
+          <div class="avatar">受</div>
+          <div class="meta">
+            <div class="head"><span class="author">山田 太郎</span><span class="time">・ 2時間前</span></div>
+            <div class="message">件名: ミーティングの確認<br>本文の冒頭がここに入ります。Slack上では親投稿として見えます。</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 受信（返信） -->
+      <div class="card">
+        <div class="post" aria-label="受信 返信">
+          <div class="accent" style="background:#1f5fbf"></div>
+          <div class="avatar">受</div>
+          <div class="meta">
+            <div class="head"><span class="author">佐藤 花子</span><span class="time">・ 1時間前（スレッド）</span></div>
+            <div class="message">Re: 先ほどの件、追記でお知らせします。スレッド内の返信として表示されます。</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 送信（新規） -->
+      <div class="card">
+        <div class="post" aria-label="送信 新規">
+          <div class="accent" style="background:#a5d6a7"></div>
+          <div class="avatar">送</div>
+          <div class="meta">
+            <div class="head"><span class="author">あなた</span><span class="time">・ 30分前</span></div>
+            <div class="message">件名: レポート提出のお知らせ<br>あなたが送った新規メールは薄い緑で表示されます。</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 送信（返信） -->
+      <div class="card">
+        <div class="post" aria-label="送信 返信">
+          <div class="accent" style="background:#9ecbff"></div>
+          <div class="avatar">送</div>
+          <div class="meta">
+            <div class="head"><span class="author">あなた</span><span class="time">・ 今しがた（スレッド）</span></div>
+            <div class="message">Re: 了解しました。スレッドに返信として表示されます。</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <h2>Slack でのかんたんな見かた</h2>
+    <ul>
+      <li>濃い色（緑／青）は「新規の投稿」か「スレッド内の返信」を見分けるための色です。</li>
+      <li>薄い色は「自分が送ったメール」を表します（色だけで優先度は決まりません）。</li>
+      <li>スレッドに入っている投稿は、その親投稿の下にまとまって表示されます。</li>
+    </ul>
+
+    <h2>よくある質問</h2>
+    <p><strong>Q:</strong> 色で大事さが決まりますか？<br>
+    <strong>A:</strong> いいえ。色は「どの種類のメールか」を分かりやすくするためだけです。</p>
+
+    <p><strong>Q:</strong> Slack に同じ内容が複数表示されることはありますか？<br>
+    <strong>A:</strong> ほとんどありませんが、まれに同時の処理で同じ投稿が重なることがあります。気になるときはチームの担当者にお知らせください。</p>
+
+    <footer>
+      <p>この説明は利用者向けです。問題が続く場合は、チーム内の担当者または管理者に連絡してください。</p>
+    </footer>
+  </div>
+</body>
+</html>
