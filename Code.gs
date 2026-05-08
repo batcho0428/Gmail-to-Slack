@@ -53,15 +53,15 @@ function main() {
   // 1. スプレッドシートから処理済みのデータを取得
   // A列: Message ID, B列: Gmail Thread ID, C列: Slack ts (タイムスタンプ)
   if (lastRow > 0) {
-    const data = sheet.getRange(1, 1, lastRow, 3).getValues();
+    const data = sheet.getRange(1, 1, lastRow, 3).getDisplayValues();
     data.forEach(row => {
       const msgId = row[0];
       const gmailThreadId = row[1];
       const slackTs = row[2];
-      
+
       if (msgId) processedIds.add(msgId);
       if (gmailThreadId && slackTs && !threadTsMap[gmailThreadId]) {
-        threadTsMap[gmailThreadId] = slackTs; // そのスレッドの親となるSlack投稿のtsを記憶
+        threadTsMap[gmailThreadId] = String(slackTs); // そのスレッドの親となるSlack投稿のtsを記憶
       }
     });
   }
@@ -82,21 +82,21 @@ function main() {
 
       // 未処理のメッセージの場合
       if (!processedIds.has(messageId)) {
-        
+
         // このGmailスレッドに対応するSlackの親投稿tsがあるか確認
         const parentTs = threadTsMap[gmailThreadId];
-        
+
         // Slackへ送信（parentTsがあればスレッド返信になる）
         const postedTs = sendToSlackAPI(message, parentTs);
-        
+
         if (postedTs) {
           // 親tsがまだ登録されていなければ（新規スレッドの1通目）、取得したtsを親として登録
           if (!parentTs) {
             threadTsMap[gmailThreadId] = postedTs;
           }
-          
+
           // シートに記録（親tsを引き継いで記録する）
-          const recordTs = parentTs ? parentTs : postedTs;
+          const recordTs = String(parentTs ? parentTs : postedTs);
           newRows.push([messageId, gmailThreadId, recordTs]);
           processedIds.add(messageId);
         }
@@ -114,9 +114,11 @@ function main() {
 function sendToSlackAPI(message, parentTs) {
   const subject = message.getSubject();
   const from = message.getFrom();
-  const body = message.getPlainBody();
   const date = message.getDate();
   const messageId = message.getId();
+  const isSentMessage = isSentMail(message);
+  const body = getSlackBodyText(message);
+  const color = getAttachmentColor(isSentMessage, parentTs);
 
   const maxLength = 2500;
   let textToSend = body;
@@ -130,7 +132,7 @@ function sendToSlackAPI(message, parentTs) {
     attachments: [
       {
         fallback: '新規メール: ' + subject,
-        color: parentTs ? '#439FE0' : '#36a64f', // 返信時は少し色を変える
+        color: color,
         author_name: from,
         title: subject || '(件名なし)',
         title_link: 'https://mail.google.com/mail/u/0/#inbox/' + messageId,
@@ -143,8 +145,8 @@ function sendToSlackAPI(message, parentTs) {
 
   // ★ parentTsが存在する場合（＝返信の場合）はスレッドに繋げる設定を追加
   if (parentTs) {
-    payload.thread_ts = parentTs;
-    payload.reply_broadcast = true; // 「以下にも投稿する」にチェックを入れる
+    payload.thread_ts = String(parentTs);
+    payload.reply_broadcast = true; // 「以下にも投稿する」を有効にする
   }
 
   const options = {
@@ -160,10 +162,10 @@ function sendToSlackAPI(message, parentTs) {
   try {
     const response = UrlFetchApp.fetch('https://slack.com/api/chat.postMessage', options);
     const json = JSON.parse(response.getContentText());
-    
+
     if (json.ok) {
       // 成功したら、投稿されたメッセージのタイムスタンプ(ts)を返す
-      return json.ts; 
+      return json.ts;
     } else {
       console.error('Slack API エラー: ' + json.error);
       return null;
@@ -172,6 +174,133 @@ function sendToSlackAPI(message, parentTs) {
     console.error('Slackへの通信に失敗しました: ' + e.message);
     return null;
   }
+}
+
+function getAttachmentColor(isSentMessage, parentTs) {
+  if (!isSentMessage && !parentTs) {
+    return '#2f7d32';
+  }
+
+  if (isSentMessage && !parentTs) {
+    return '#a5d6a7';
+  }
+
+  if (!isSentMessage && parentTs) {
+    return '#1f5fbf';
+  }
+
+  return '#9ecbff';
+}
+
+function getSlackBodyText(message) {
+  const plainBody = normalizeSlackText(message.getPlainBody());
+  if (plainBody) {
+    return plainBody;
+  }
+
+  return htmlToPlainText(message.getBody());
+}
+
+function normalizeSlackText(text) {
+  if (!text) {
+    return '';
+  }
+
+  return String(text)
+    .replace(/\r\n?/g, '\n')
+    .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, '')
+    .trim();
+}
+
+function htmlToPlainText(html) {
+  if (!html) {
+    return '';
+  }
+
+  let text = String(html)
+    .replace(/<\s*br\s*\/?>/gi, '\n')
+    .replace(/<\s*\/p\s*>/gi, '\n\n')
+    .replace(/<\s*\/div\s*>/gi, '\n')
+    .replace(/<\s*\/tr\s*>/gi, '\n')
+    .replace(/<\s*\/li\s*>/gi, '\n')
+    .replace(/<\s*td[^>]*>/gi, '\t')
+    .replace(/<\s*th[^>]*>/gi, '\t')
+    .replace(/<\s*style[\s\S]*?<\s*\/style\s*>/gi, '')
+    .replace(/<\s*script[\s\S]*?<\s*\/script\s*>/gi, '')
+    .replace(/<[^>]+>/g, '');
+
+  text = text
+    .replace(/&nbsp;/gi, ' ')
+    .replace(/&amp;/gi, '&')
+    .replace(/&lt;/gi, '<')
+    .replace(/&gt;/gi, '>')
+    .replace(/&quot;/gi, '"')
+    .replace(/&#39;/gi, "'");
+
+  return normalizeSlackText(text).replace(/\n{3,}/g, '\n\n');
+}
+
+function isSentMail(message) {
+  const senderAddress = extractEmailAddress(message.getFrom());
+  if (!senderAddress) {
+    return false;
+  }
+
+  const knownAddresses = new Set();
+  const effectiveUserEmail = Session.getEffectiveUser().getEmail();
+  const activeUserEmail = Session.getActiveUser().getEmail();
+
+  if (effectiveUserEmail) {
+    knownAddresses.add(effectiveUserEmail.toLowerCase());
+  }
+  if (activeUserEmail) {
+    knownAddresses.add(activeUserEmail.toLowerCase());
+  }
+
+  const aliases = GmailApp.getAliases();
+  for (let i = 0; i < aliases.length; i++) {
+    knownAddresses.add(aliases[i].toLowerCase());
+  }
+
+  return knownAddresses.has(senderAddress.toLowerCase());
+}
+
+function extractEmailAddress(value) {
+  const match = value && value.match(/<([^>]+)>/);
+  if (match && match[1]) {
+    return match[1].trim();
+  }
+
+  return value ? value.trim() : '';
+}
+
+// ==========================================
+// 初期セットアップ統合関数
+// ==========================================
+// 以下の3つのセットアップ関数をまとめて実行します
+function setupAll() {
+  console.log('========================================');
+  console.log('Gmail-to-Slack 初期セットアップを開始します');
+  console.log('========================================\n');
+
+  // 1. スクリプトプロパティの初期化
+  console.log('【ステップ 1】スクリプトプロパティを設定中...');
+  setupScriptProperty();
+  console.log('✓ 完了\n');
+
+  // 2. スプレッドシートの作成
+  console.log('【ステップ 2】スプレッドシートを作成中...');
+  setupSpreadsheet();
+  console.log('✓ 完了\n');
+
+  // 3. トリガーの設定
+  console.log('【ステップ 3】自動実行トリガーを設定中...');
+  setupTrigger();
+  console.log('✓ 完了\n');
+
+  console.log('========================================');
+  console.log('セットアップが完了しました！');
+  console.log('========================================');
 }
 
 // ==========================================
@@ -196,15 +325,16 @@ function setupSpreadsheet() {
     const ssName = "Slack転送_メール管理リスト";
     const ss = SpreadsheetApp.create(ssName);
     const ssId = ss.getId();
-    
+
     const sheetName = "MailLists";
     ss.getSheets()[0].setName(sheetName);
+    ss.getSheets()[0].getRange('C:C').setNumberFormat('@');
 
     try {
       const scriptId = ScriptApp.getScriptId();
       const scriptFile = DriveApp.getFileById(scriptId);
       const parents = scriptFile.getParents();
-      
+
       if (parents.hasNext()) {
         const parentFolder = parents.next();
         const ssFile = DriveApp.getFileById(ssId);
@@ -234,7 +364,7 @@ function setupSpreadsheet() {
 // この関数を選択して実行すると、main関数を「5分おき」に自動実行する設定を行います。
 function setupTrigger() {
   const functionName = 'main';
-  
+
   // 既存の同じトリガーがあれば削除（重複登録を防ぐため）
   const triggers = ScriptApp.getProjectTriggers();
   for (let i = 0; i < triggers.length; i++) {
